@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Métré Chantier Pro</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    input[type="number"] {
+      -moz-appearance: textfield;
+    }
+    button, input, select {
+      touch-action: manipulation;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans pb-16 antialiased">
+
+  <header class="bg-slate-900 text-white px-4 py-3 sticky top-0 z-30 shadow-sm flex items-center justify-between">
+    <div>
+      <h1 class="text-base font-bold tracking-tight">Métré & Matériaux</h1>
+      <p class="text-[11px] text-slate-400">Calculateur express rénovation</p>
+    </div>
+    <span class="text-[10px] bg-amber-500 text-slate-950 font-bold px-2 py-0.5 rounded-full">v2.0</span>
+  </header>
+
+  <main class="max-w-md mx-auto p-3.5 space-y-3.5">
+
+    <div class="flex rounded-lg bg-slate-200 p-1 text-xs font-semibold">
+      <button id="modeQuickBtn" onclick="switchMode('quick')" class="flex-1 py-1.5 rounded-md bg-white shadow-xs text-slate-900">Pièce standard</button>
+      <button id="modeWallsBtn" onclick="switchMode('walls')" class="flex-1 py-1.5 rounded-md text-slate-600">Mur par mur (segmenté)</button>
+    </div>
+
+    <!-- 1. Cotes -->
+    <section class="bg-white rounded-xl p-3.5 shadow-sm border border-slate-200/80 space-y-3">
+      <div class="flex justify-between items-center">
+        <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500">1. Cotes de la pièce (m)</h2>
+        <span id="modeHelp" class="text-[11px] text-slate-400">L × l × H</span>
+      </div>
+
+      <div id="quickForm" class="space-y-3">
+        <div class="grid grid-cols-3 gap-2">
+          <div>
+            <label class="block text-[11px] font-medium text-slate-600 mb-1">Longueur</label>
+            <input id="inLength" type="number" step="0.01" value="4.50" inputmode="decimal" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-center font-bold text-slate-900 text-sm focus:ring-2 focus:ring-blue-600 outline-none">
+          </div>
+          <div>
+            <label class="block text-[11px] font-medium text-slate-600 mb-1">Largeur</label>
+            <input id="inWidth" type="number" step="0.01" value="3.50" inputmode="decimal" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-center font-bold text-slate-900 text-sm focus:ring-2 focus:ring-blue-600 outline-none">
+          </div>
+          <div>
+            <label class="block text-[11px] font-medium text-slate-600 mb-1">Hauteur</label>
+            <input id="inHeight" type="number" step="0.01" value="2.50" inputmode="decimal" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-center font-bold text-slate-900 text-sm focus:ring-2 focus:ring-blue-600 outline-none">
+          </div>
+        </div>
+      </div>
+
+      <div id="wallsForm" class="space-y-3 hidden">
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <div>
+            <label class="block font-medium text-slate-600 mb-1">HSP par défaut (m)</label>
+            <input id="inDefaultH" type="number" step="0.01" value="2.50" inputmode="decimal" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-center font-semibold text-slate-900">
+          </div>
+          <div>
+            <label class="block font-medium text-slate-600 mb-1">Surface sol (m²)</label>
+            <input id="inManualFloor" type="number" step="0.01" placeholder="Optionnel" inputmode="decimal" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-center font-semibold text-slate-900">
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between pt-1">
+          <span class="text-xs font-semibold text-slate-700">Pans mesurés</span>
+          <button type="button" onclick="addWall()" class="px-2 py-1 bg-blue-50 text-blue-700 rounded-md text-xs font-bold hover:bg-blue-100">+ Pan de mur</button>
+        </div>
+
+        <div id="wallList" class="space-y-1.5"></div>
+      </div>
+
+      <div class="grid grid-cols-3 gap-1.5 pt-2 text-center text-[11px] text-slate-500 border-t border-slate-100">
+        <div>Sol/Plafond : <strong id="rawFloor" class="text-slate-900 block text-xs">-- m²</strong></div>
+        <div>Périmètre : <strong id="rawPerim" class="text-slate-900 block text-xs">-- m</strong></div>
+        <div>Murs bruts : <strong id="rawWalls" class="text-slate-900 block text-xs">-- m²</strong></div>
+      </div>
+    </section>
+
+    <!-- 2. Déductions -->
+    <section class="bg-white rounded-xl p-3.5 shadow-sm border border-slate-200/80 space-y-3">
+      <div class="flex items-center justify-between">
+        <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500">2. Surfaces à déduire</h2>
+        <span id="totalDeductionsBadge" class="text-xs bg-rose-50 text-rose-700 font-semibold px-2 py-0.5 rounded">-0.00 m²</span>
+      </div>
+
+      <div class="grid grid-cols-4 gap-1 text-[11px]">
+        <button type="button" onclick="addOpening('Porte', 0.83, 2.04)" class="p-2 bg-slate-100 active:bg-slate-200 rounded-lg text-slate-700 font-medium">+ Porte</button>
+        <button type="button" onclick="addOpening('Fenêtre', 1.00, 1.20)" class="p-2 bg-slate-100 active:bg-slate-200 rounded-lg text-slate-700 font-medium">+ Fenêtre</button>
+        <button type="button" onclick="addOpening('Baie', 2.40, 2.15)" class="p-2 bg-slate-100 active:bg-slate-200 rounded-lg text-slate-700 font-medium">+ Baie</button>
+        <button type="button" onclick="addOpening('Pan entier', 3.00, 2.50)" class="p-2 bg-rose-50 text-rose-800 active:bg-rose-100 rounded-lg font-semibold">+ Pan</button>
+      </div>
+
+      <div id="openingsList" class="space-y-1.5"></div>
+    </section>
+
+    <!-- 3. Nette -->
+    <section class="bg-slate-900 text-white rounded-xl p-3.5 shadow-sm space-y-2">
+      <h2 class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Surfaces nettes déduites</h2>
+      <div class="grid grid-cols-3 gap-2 text-center">
+        <div class="bg-slate-800/80 p-2 rounded-lg">
+          <span class="text-[10px] text-slate-400 block">Sol</span>
+          <span id="netFloor" class="text-sm font-bold">0.00 m²</span>
+        </div>
+        <div class="bg-slate-800/80 p-2 rounded-lg">
+          <span class="text-[10px] text-slate-400 block">Murs nets</span>
+          <span id="netWalls" class="text-sm font-bold text-amber-400">0.00 m²</span>
+        </div>
+        <div class="bg-slate-800/80 p-2 rounded-lg">
+          <span class="text-[10px] text-slate-400 block">Plafond</span>
+          <span id="netCeiling" class="text-sm font-bold">0.00 m²</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. Matériaux -->
+    <section class="bg-white rounded-xl p-3.5 shadow-sm border border-slate-200/80 space-y-3.5">
+      <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500">3. Estimation fournitures</h2>
+
+      <div class="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-lg text-xs font-semibold">
+        <button id="tabBtnPaint" onclick="switchTab('paint')" class="py-1.5 rounded-md bg-white shadow-xs text-slate-900">Peinture</button>
+        <button id="tabBtnTile" onclick="switchTab('tile')" class="py-1.5 rounded-md text-slate-600">Carrelage</button>
+        <button id="tabBtnWallpaper" onclick="switchTab('wallpaper')" class="py-1.5 rounded-md text-slate-600">Papier peint</button>
+      </div>
+
+      <!-- Peinture -->
+      <div id="tabContentPaint" class="space-y-3">
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <div>
+            <label class="block font-medium text-slate-600 mb-1">Destination</label>
+            <select id="paintTarget" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs">
+              <option value="walls">Murs seuls</option>
+              <option value="ceiling">Plafond seul</option>
+              <option value="both">Murs + Plafond</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-medium text-slate-600 mb-1">Couches</label>
+            <select id="paintCoats" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs">
+              <option value="1">1 couche</option>
+              <option value="2" selected>2 couches</option>
+              <option value="3">3 couches</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-medium text-slate-600 mb-1">Rendement (m² / L)</label>
+          <input id="paintYield" type="number" step="0.5" value="10" inputmode="decimal" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold">
+        </div>
+
+        <div class="p-3 bg-amber-50/70 border border-amber-200 rounded-lg text-amber-950 text-xs space-y-1">
+          <div class="font-bold text-sm" id="resPaintVolume">Volume total : 0 L</div>
+          <p id="resPaintBuckets" class="text-amber-800 text-[11px]">Conditionnement conseillé : --</p>
+        </div>
+      </div>
+
+      <!-- Carrelage -->
+      <div id="tabContentTile" class="space-y-3 hidden">
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <div>
+            <label class="block font-medium text-slate-600 mb-1">Pose (pertes)</label>
+            <select id="tileWaste" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs">
+              <option value="1.10">Droite (+10%)</option>
+              <option value="1.15">Diagonale (+15%)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-medium text-slate-600 mb-1">Colle (kg/m²)</label>
+            <select id="tileGlueRate" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs">
+              <option value="4.5">Standard (4.5 kg/m²)</option>
+              <option value="6.0">Double encollage (6 kg/m²)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="p-3 bg-emerald-50/70 border border-emerald-200 rounded-lg text-emerald-950 text-xs space-y-1">
+          <div class="font-bold text-sm" id="resTileArea">Carrelage à commander : 0 m²</div>
+          <div id="resTileGlue" class="text-emerald-800">Colle : 0 sac(s) de 25 kg</div>
+          <div id="resTileGrout" class="text-emerald-800">Joints : env. 0 kg</div>
+          <div id="resTileBaseboard" class="text-emerald-800">Plinthes : 0 m linéaires (+10%)</div>
+        </div>
+      </div>
+
+      <!-- Papier peint -->
+      <div id="tabContentWallpaper" class="space-y-3 hidden">
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <div>
+            <label class="block font-medium text-slate-600 mb-1">Rouleau</label>
+            <div class="text-slate-500 py-2 font-mono text-[11px]">0.53 m × 10.05 m</div>
+          </div>
+          <div>
+            <label class="block font-medium text-slate-600 mb-1">Raccord</label>
+            <select id="paperPattern" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs">
+              <option value="0">Sans raccord</option>
+              <option value="32">Raccord 32 cm</option>
+              <option value="64">Raccord 64 cm</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="p-3 bg-purple-50/70 border border-purple-200 rounded-lg text-purple-950 text-xs space-y-1">
+          <div class="font-bold text-sm" id="resPaperRolls">Rouleaux : 0</div>
+          <p id="resPaperGlue" class="text-purple-800 text-[11px]">Colle : 0 paquet(s)</p>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <script>
+    let calculationMode = 'quick';
+
+    let walls = [
+      { id: 1, name: 'Mur Nord', length: 4.50, height: 2.50 },
+      { id: 2, name: 'Mur Est', length: 3.50, height: 2.50 },
+      { id: 3, name: 'Mur Sud', length: 4.50, height: 2.50 },
+      { id: 4, name: 'Mur Ouest', length: 3.50, height: 2.50 }
+    ];
+
+    let openings = [
+      { id: 1, name: 'Porte entrée', width: 0.83, height: 2.04 },
+      { id: 2, name: 'Fenêtre', width: 1.00, height: 1.20 }
+    ];
+
+    function switchMode(mode) {
+      calculationMode = mode;
+      const isQuick = mode === 'quick';
+
+      document.getElementById('quickForm').classList.toggle('hidden', !isQuick);
+      document.getElementById('wallsForm').classList.toggle('hidden', isQuick);
+
+      const btnQuick = document.getElementById('modeQuickBtn');
+      const btnWalls = document.getElementById('modeWallsBtn');
+
+      btnQuick.className = isQuick
+        ? "flex-1 py-1.5 rounded-md bg-white shadow-xs text-slate-900 font-semibold"
+        : "flex-1 py-1.5 rounded-md text-slate-600";
+
+      btnWalls.className = !isQuick
+        ? "flex-1 py-1.5 rounded-md bg-white shadow-xs text-slate-900 font-semibold"
+        : "flex-1 py-1.5 rounded-md text-slate-600";
+
+      document.getElementById('modeHelp').innerText = isQuick ? 'L × l × H' : 'Somme des pans';
+      compute();
+    }
+
+    function addWall() {
+      const defaultH = parseFloat(document.getElementById('inDefaultH').value) || 2.50;
+      const num = walls.length + 1;
+      walls.push({ id: Date.now(), name: `Mur ${num}`, length: 3.00, height: defaultH });
+      renderWalls();
+      compute();
+    }
+
+    function removeWall(id) {
+      walls = walls.filter(w => w.id !== id);
+      renderWalls();
+      compute();
+    }
+
+    function updateWall(id, field, val) {
+      const wall = walls.find(w => w.id === id);
+      if (wall) {
+        wall[field] = field === 'name' ? val : (parseFloat(val) || 0);
+        compute();
+      }
+    }
+
+    function renderWalls() {
+      const container = document.getElementById('wallList');
+      container.innerHTML = '';
+
+      walls.forEach(w => {
+        const row = document.createElement('div');
+        row.className = "flex items-center gap-1.5 bg-slate-50 p-1.5 rounded-lg border border-slate-200 text-xs";
+        row.innerHTML = `
+          <input type="text" value="${w.name}" oninput="updateWall(${w.id}, 'name', this.value)" class="w-24 bg-transparent font-medium text-slate-700 outline-none">
+          <div class="flex items-center gap-1 flex-1 justify-end">
+            <input type="number" step="0.01" value="${w.length}" inputmode="decimal" oninput="updateWall(${w.id}, 'length', this.value)" class="w-14 p-1 bg-white border border-slate-300 rounded text-center font-semibold">
+            <span class="text-slate-400">×</span>
+            <input type="number" step="0.01" value="${w.height}" inputmode="decimal" oninput="updateWall(${w.id}, 'height', this.value)" class="w-14 p-1 bg-white border border-slate-300 rounded text-center font-semibold">
+            <span class="text-slate-400 text-[10px]">m</span>
+          </div>
+          <button onclick="removeWall(${w.id})" class="text-rose-500 font-bold px-1.5 py-1">✕</button>
+        `;
+        container.appendChild(row);
+      });
+    }
+
+    function addOpening(name, w, h) {
+      openings.push({ id: Date.now(), name, width: w, height: h });
+      renderOpenings();
+      compute();
+    }
+
+    function removeOpening(id) {
+      openings = openings.filter(o => o.id !== id);
+      renderOpenings();
+      compute();
+    }
+
+    function updateOpening(id, field, value) {
+      const item = openings.find(o => o.id === id);
+      if (item) {
+        item[field] = field === 'name' ? value : (parseFloat(value) || 0);
+        compute();
+      }
+    }
+
+    function renderOpenings() {
+      const container = document.getElementById('openingsList');
+      container.innerHTML = '';
+
+      openings.forEach(op => {
+        const isWallDeduction = op.name.toLowerCase().includes('pan') || op.name.toLowerCase().includes('mur');
+        const row = document.createElement('div');
+        row.className = `flex items-center gap-1.5 p-1.5 rounded-lg border text-xs ${isWallDeduction ? 'bg-rose-50/50 border-rose-200' : 'bg-slate-50 border-slate-200'}`;
+        row.innerHTML = `
+          <input type="text" value="${op.name}" oninput="updateOpening(${op.id}, 'name', this.value)" class="w-28 bg-transparent font-medium ${isWallDeduction ? 'text-rose-900 font-semibold' : 'text-slate-700'} outline-none">
+          <div class="flex items-center gap-1 flex-1 justify-end">
+            <input type="number" step="0.01" value="${op.width}" inputmode="decimal" oninput="updateOpening(${op.id}, 'width', this.value)" class="w-12 p-1 bg-white border border-slate-300 rounded text-center font-semibold text-xs">
+            <span class="text-slate-400">×</span>
+            <input type="number" step="0.01" value="${op.height}" inputmode="decimal" oninput="updateOpening(${op.id}, 'height', this.value)" class="w-12 p-1 bg-white border border-slate-300 rounded text-center font-semibold text-xs">
+            <span class="text-slate-400 text-[10px]">m</span>
+          </div>
+          <button onclick="removeOpening(${op.id})" class="text-rose-500 font-bold px-1.5 py-1">✕</button>
+        `;
+        container.appendChild(row);
+      });
+    }
+
+    function switchTab(tabKey) {
+      ['paint', 'tile', 'wallpaper'].forEach(t => {
+        const isSelected = t === tabKey;
+        document.getElementById(`tabContent${t.charAt(0).toUpperCase() + t.slice(1)}`).classList.toggle('hidden', !isSelected);
+        const btn = document.getElementById(`tabBtn${t.charAt(0).toUpperCase() + t.slice(1)}`);
+        btn.className = isSelected 
+          ? "py-1.5 rounded-md bg-white shadow-xs text-slate-900 font-semibold"
+          : "py-1.5 rounded-md text-slate-600";
+      });
+      compute();
+    }
+
+    function compute() {
+      let rawFloor = 0;
+      let rawPerim = 0;
+      let rawWalls = 0;
+      let averageH = 2.50;
+
+      if (calculationMode === 'quick') {
+        const L = parseFloat(document.getElementById('inLength').value) || 0;
+        const W = parseFloat(document.getElementById('inWidth').value) || 0;
+        const H = parseFloat(document.getElementById('inHeight').value) || 0;
+
+        rawFloor = L * W;
+        rawPerim = 2 * (L + W);
+        rawWalls = rawPerim * H;
+        averageH = H;
+      } else {
+        walls.forEach(w => {
+          rawPerim += w.length;
+          rawWalls += (w.length * w.height);
+        });
+
+        averageH = rawPerim > 0 ? (rawWalls / rawPerim) : (parseFloat(document.getElementById('inDefaultH').value) || 2.50);
+
+        const manualFloor = parseFloat(document.getElementById('inManualFloor').value);
+        if (!isNaN(manualFloor) && manualFloor > 0) {
+          rawFloor = manualFloor;
+        } else {
+          rawFloor = Math.pow(rawPerim / 4, 2);
+        }
+      }
+
+      document.getElementById('rawFloor').innerText = `${rawFloor.toFixed(2)} m²`;
+      document.getElementById('rawPerim').innerText = `${rawPerim.toFixed(2)} m`;
+      document.getElementById('rawWalls').innerText = `${rawWalls.toFixed(2)} m²`;
+
+      let totalDeductions = 0;
+      let totalDoorWidth = 0;
+
+      openings.forEach(op => {
+        totalDeductions += (op.width * op.height);
+        if (op.name.toLowerCase().includes('porte')) {
+          totalDoorWidth += op.width;
+        }
+      });
+
+      document.getElementById('totalDeductionsBadge').innerText = `-${totalDeductions.toFixed(2)} m²`;
+
+      const netWalls = Math.max(0, rawWalls - totalDeductions);
+      const netFloor = rawFloor;
+      const netCeiling = rawFloor;
+
+      document.getElementById('netFloor').innerText = `${netFloor.toFixed(2)} m²`;
+      document.getElementById('netWalls').innerText = `${netWalls.toFixed(2)} m²`;
+      document.getElementById('netCeiling').innerText = `${netCeiling.toFixed(2)} m²`;
+
+      // Peinture
+      const paintTarget = document.getElementById('paintTarget').value;
+      const paintCoats = parseInt(document.getElementById('paintCoats').value, 10);
+      const paintYield = parseFloat(document.getElementById('paintYield').value) || 10;
+
+      let paintArea = (paintTarget === 'walls') ? netWalls : ((paintTarget === 'ceiling') ? netCeiling : (netWalls + netCeiling));
+      const totalLiters = (paintArea * paintCoats) / paintYield;
+      document.getElementById('resPaintVolume').innerText = `Volume total : ${totalLiters.toFixed(1)} L`;
+
+      const buckets10L = Math.floor(totalLiters / 10);
+      const remainingAfter10 = totalLiters % 10;
+      const buckets2_5L = Math.ceil(remainingAfter10 / 2.5);
+      
+      let bucketAdvice = [];
+      if (buckets10L > 0) bucketAdvice.push(`${buckets10L} pot(s) de 10 L`);
+      if (buckets2_5L > 0) bucketAdvice.push(`${buckets2_5L} pot(s) de 2,5 L`);
+      document.getElementById('resPaintBuckets').innerText = `Conditionnement conseillé : ${bucketAdvice.join(' + ') || 'Moins d’un pot de 2,5 L'}`;
+
+      // Carrelage
+      const tileWaste = parseFloat(document.getElementById('tileWaste').value);
+      const tileGlueRate = parseFloat(document.getElementById('tileGlueRate').value);
+      const tileAreaToOrder = netFloor * tileWaste;
+      const totalGlueKg = netFloor * tileGlueRate;
+      const bags25Kg = Math.ceil(totalGlueKg / 25);
+      const groutKg = netFloor * 0.4;
+      const baseboardMeters = Math.max(0, (rawPerim - totalDoorWidth) * 1.10);
+
+      document.getElementById('resTileArea').innerText = `Carrelage à commander : ${tileAreaToOrder.toFixed(2)} m²`;
+      document.getElementById('resTileGlue').innerText = `Colle (${tileGlueRate} kg/m²) : ${bags25Kg} sac(s) de 25 kg (${totalGlueKg.toFixed(0)} kg)`;
+      document.getElementById('resTileGrout').innerText = `Joints : env. ${groutKg.toFixed(1)} kg`;
+      document.getElementById('resTileBaseboard').innerText = `Plinthes : ${baseboardMeters.toFixed(1)} m linéaires (+10%)`;
+
+      // Papier peint
+      const patternCm = parseFloat(document.getElementById('paperPattern').value) / 100;
+      const cutHeight = averageH + (patternCm > 0 ? patternCm : 0.05);
+      const dropsPerRoll = Math.floor(10.05 / cutHeight) || 1;
+      const totalDrops = Math.ceil(rawPerim / 0.53);
+      const rollsNeeded = Math.ceil(totalDrops / dropsPerRoll);
+      const glueBoxes = Math.ceil(rollsNeeded / 5);
+
+      document.getElementById('resPaperRolls').innerText = `Rouleaux requis : ${rollsNeeded} rouleau(x)`;
+      document.getElementById('resPaperGlue').innerText = `Colle : ${glueBoxes} paquet(s) (1 paquet pour ~5 rouleaux)`;
+    }
+
+    ['inLength', 'inWidth', 'inHeight', 'inDefaultH', 'inManualFloor', 'paintTarget', 'paintCoats', 'paintYield', 'tileWaste', 'tileGlueRate', 'paperPattern']
+      .forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', compute);
+      });
+
+    renderWalls();
+    renderOpenings();
+    compute();
+  </script>
+</body>
+</html>
